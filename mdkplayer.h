@@ -26,6 +26,7 @@
 
 #include "mdkplayer_global.h"
 #include <QtCore/qurl.h>
+#include <QtCore/qtimer.h>
 #include <QtQuick/qquickitem.h>
 
 namespace mdk
@@ -48,8 +49,7 @@ class MDKPLAYER_API MDKPlayer : public QQuickItem
     Q_DISABLE_COPY_MOVE(MDKPlayer)
     Q_CLASSINFO("RegisterEnumClassesUnscoped", "false")
 
-    Q_PROPERTY(QUrl url READ url WRITE setUrl NOTIFY urlChanged)
-    Q_PROPERTY(QList<QUrl> urls READ urls WRITE setUrls NOTIFY urlsChanged)
+    Q_PROPERTY(QUrl source READ source WRITE setSource NOTIFY sourceChanged)
     Q_PROPERTY(QString fileName READ fileName NOTIFY fileNameChanged)
     Q_PROPERTY(QString filePath READ filePath NOTIFY filePathChanged)
     Q_PROPERTY(qint64 position READ position WRITE setPosition NOTIFY positionChanged)
@@ -88,17 +88,17 @@ class MDKPLAYER_API MDKPlayer : public QQuickItem
     friend class VideoTextureNode;
 
 public:
-    enum class PlaybackState : int
+    enum class PlaybackState
     {
-        Stopped = 0,
+        Stopped,
         Playing,
         Paused
     };
     Q_ENUM(PlaybackState)
 
-    enum class MediaStatus : int
+    enum class MediaStatus
     {
-        Unknown = 0,
+        Unknown,
         NoMedia,
         Unloaded,
         Loading,
@@ -113,9 +113,9 @@ public:
     };
     Q_ENUM(MediaStatus)
 
-    enum class LogLevel : int
+    enum class LogLevel
     {
-        Off = 0,
+        Off,
         Info,
         Debug,
         Warning,
@@ -134,9 +134,9 @@ public:
 
     using MetaData = QHash<QString, QString>;
 
-    enum class FillMode : int
+    enum class FillMode
     {
-        PreserveAspectFit = 0,
+        PreserveAspectFit,
         PreserveAspectCrop,
         Stretch
     };
@@ -188,11 +188,8 @@ public:
     explicit MDKPlayer(QQuickItem *parent = nullptr);
     ~MDKPlayer() override;
 
-    QUrl url() const;
-    void setUrl(const QUrl &value);
-
-    QList<QUrl> urls() const;
-    void setUrls(const QList<QUrl> &value);
+    QUrl source() const;
+    void setSource(const QUrl &value);
 
     QString fileName() const;
 
@@ -443,11 +440,8 @@ public Q_SLOTS:
     void stopRecording();
     void seekBackward(const int value = 5000);
     void seekForward(const int value = 5000);
-    void playPrevious();
-    void playNext();
 
 protected:
-    void timerEvent(QTimerEvent *event) override;
     QSGNode *updatePaintNode(QSGNode *node, UpdatePaintNodeData *data) override;
 #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
@@ -462,16 +456,13 @@ private:
     void releaseResources() override;
     void initMdkHandlers();
     void resetInternalData();
-    void advance();
-    void advance(const QUrl &value);
 
 Q_SIGNALS:
     void loaded();
     void playing();
     void paused();
     void stopped();
-    void urlChanged();
-    void urlsChanged();
+    void sourceChanged();
     void fileNameChanged();
     void filePathChanged();
     void positionChanged();
@@ -499,13 +490,12 @@ Q_SIGNALS:
     void fillModeChanged();
     void mediaInfoChanged();
     void loopChanged();
-    void newHistory(const QUrl &param1, const qint64 param2);
+    void newHistory(const QUrl &url, const qint64 pos);
 
 private:
     VideoTextureNode *m_node = nullptr;
 
-    QList<QUrl> m_urls = {};
-    QList<QUrl>::const_iterator m_next_it = nullptr;
+    QTimer m_timer;
 
     QSharedPointer<mdk::Player> m_player;
 

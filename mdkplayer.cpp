@@ -127,12 +127,22 @@ MDKPlayer::MDKPlayer(QQuickItem *parent) : QQuickItem(parent)
         QMetaObject::invokeMethod(this, "update");
     });
     m_snapshotDirectory = QDir::toNativeSeparators(QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
-    connect(this, &MDKPlayer::urlChanged, this, &MDKPlayer::fileNameChanged);
-    connect(this, &MDKPlayer::urlChanged, this, &MDKPlayer::filePathChanged);
+    connect(this, &MDKPlayer::sourceChanged, this, &MDKPlayer::fileNameChanged);
+    connect(this, &MDKPlayer::sourceChanged, this, &MDKPlayer::filePathChanged);
     connect(this, &MDKPlayer::positionChanged, this, &MDKPlayer::positionTextChanged);
     connect(this, &MDKPlayer::durationChanged, this, &MDKPlayer::durationTextChanged);
     initMdkHandlers();
-    startTimer(50);
+    m_timer.setTimerType(Qt::CoarseTimer);
+    m_timer.setInterval(500);
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 12, 0))
+    m_timer.callOnTimeout(this, [this](){
+        if (isPlaying()) {
+            Q_EMIT positionChanged();
+        }
+    });
+#else
+#endif
+    m_timer.start();
 }
 
 MDKPlayer::~MDKPlayer()
@@ -191,7 +201,7 @@ void MDKPlayer::geometryChanged(const QRectF &newGeometry, const QRectF &oldGeom
     }
 }
 
-QUrl MDKPlayer::url() const
+QUrl MDKPlayer::source() const
 {
     // ### TODO: isStopped() ?
     if (!m_player->url()) {
@@ -232,47 +242,6 @@ void MDKPlayer::setUrl(const QUrl &value)
     }
 }
 
-void MDKPlayer::setUrls(const QList<QUrl> &value)
-{
-    m_player->setNextMedia(nullptr);
-    if (value.isEmpty()) {
-        m_urls.clear();
-        Q_EMIT urlsChanged();
-        m_next_it = nullptr;
-        stop();
-        return;
-    }
-    const QUrl now = url();
-    const QUrl first = value.constFirst();
-    if (m_urls == value) {
-        if (!isPlaying()) {
-            if (now.isValid()) {
-                play();
-            } else {
-                play(first);
-            }
-        }
-    } else {
-        m_urls = value;
-        Q_EMIT urlsChanged();
-        if (!now.isValid()) {
-            play(first);
-            return;
-        }
-        m_next_it = std::find(m_urls.cbegin(), m_urls.cend(), now);
-        if (m_next_it != m_urls.cbegin()) {
-            play(first);
-            return;
-        }
-        //advance(now);
-    }
-}
-
-QList<QUrl> MDKPlayer::urls() const
-{
-    return m_urls;
-}
-
 bool MDKPlayer::loop() const
 {
     return m_loop;
@@ -288,15 +257,15 @@ void MDKPlayer::setLoop(const bool value)
 
 QString MDKPlayer::fileName() const
 {
-    const QUrl source = url();
-    return source.isValid() ? (source.isLocalFile() ? source.fileName() : source.toDisplayString())
+    const QUrl url = source();
+    return url.isValid() ? (url.isLocalFile() ? url.fileName() : url.toDisplayString())
                             : QString{};
 }
 
 QString MDKPlayer::filePath() const
 {
-    const QUrl source = url();
-    return source.isValid() ? urlToString(source, true) : QString{};
+    const QUrl url = source();
+    return url.isValid() ? urlToString(url, true) : QString{};
 }
 
 qint64 MDKPlayer::position() const
@@ -366,7 +335,7 @@ void MDKPlayer::setMute(const bool value)
 bool MDKPlayer::seekable() const
 {
     // Local files are always seekable, in theory.
-    return (isLoaded() && url().isLocalFile());
+    return (isLoaded() && source().isLocalFile());
 }
 
 MDKPlayer::PlaybackState MDKPlayer::playbackState() const
@@ -751,7 +720,7 @@ void MDKPlayer::open(const QUrl &value)
     if (!value.isValid()) {
         return;
     }
-    if (value != url()) {
+    if (value != source()) {
         setUrl(value);
     }
     if (!isPlaying()) {
@@ -761,7 +730,7 @@ void MDKPlayer::open(const QUrl &value)
 
 void MDKPlayer::play()
 {
-    if (!isPaused() || !url().isValid()) {
+    if (!isPaused() || !source().isValid()) {
         return;
     }
     m_player->setState(MDK_NS_PREPEND(PlaybackState)::Playing);
@@ -772,11 +741,11 @@ void MDKPlayer::play(const QUrl &value)
     if (!value.isValid()) {
         return;
     }
-    const QUrl source = url();
-    if ((value == source) && !isPlaying()) {
+    const QUrl url = source();
+    if ((value == url) && !isPlaying()) {
         play();
     }
-    if (value != source) {
+    if (value != url) {
         open(value);
     }
 }
@@ -870,34 +839,6 @@ void MDKPlayer::seekForward(const int value)
     seek(position() + qAbs(value), false);
 }
 
-void MDKPlayer::playPrevious()
-{
-    if (isStopped() || (m_urls.count() < 2)) {
-        return;
-    }
-    auto it = std::find(m_urls.cbegin(), m_urls.cend(), url());
-    if (it == m_urls.cbegin()) {
-        it = m_urls.cend();
-    }
-    --it;
-    play(*it);
-}
-
-void MDKPlayer::playNext()
-{
-    if (isStopped() || (m_urls.count() < 2)) {
-        return;
-    }
-    auto it = std::find(m_urls.cbegin(), m_urls.cend(), url());
-    if (it != m_urls.cend()) {
-        ++it;
-    }
-    if (it == m_urls.cend()) {
-        it = m_urls.cbegin();
-    }
-    play(*it);
-}
-
 void MDKPlayer::startRecording(const QUrl &value, const QString &format)
 {
     if (value.isValid() && value.isLocalFile()) {
@@ -915,14 +856,6 @@ void MDKPlayer::stopRecording()
     m_player->record();
     if (!m_livePreview) {
         qDebug() << "Recording stopped.";
-    }
-}
-
-void MDKPlayer::timerEvent(QTimerEvent *event)
-{
-    QQuickItem::timerEvent(event);
-    if (!isStopped()) {
-        Q_EMIT positionChanged();
     }
 }
 
@@ -949,15 +882,14 @@ void MDKPlayer::initMdkHandlers()
         }
     });
     m_player->currentMediaChanged([this] {
-        const QUrl now = url();
-        if (!now.isValid()) {
+        const QUrl url = source();
+        if (!url.isValid()) {
             return;
         }
-        advance(now);
         if (!m_livePreview) {
-            qDebug() << "Current media -->" << urlToString(now, true);
+            qDebug() << "Current media -->" << urlToString(url, true);
         }
-        Q_EMIT urlChanged();
+        Q_EMIT sourceChanged();
     });
     m_player->onMediaStatusChanged([this](MDK_NS_PREPEND(MediaStatus) ms) {
         if (MDK_NS_PREPEND(flags_added)(static_cast<MDK_NS_PREPEND(MediaStatus)>(m_mediaStatus), ms, MDK_NS_PREPEND(MediaStatus)::Loaded)) {
@@ -1111,47 +1043,13 @@ void MDKPlayer::resetInternalData()
     //m_loop = false;
     m_mediaInfo = {};
     m_mediaStatus = static_cast<int>(MDK_NS_PREPEND(MediaStatus)::NoMedia);
-    Q_EMIT urlChanged();
+    Q_EMIT sourceChanged();
     Q_EMIT positionChanged();
     Q_EMIT durationChanged();
     Q_EMIT seekableChanged();
     Q_EMIT mediaInfoChanged();
     //Q_EMIT loopChanged();
     Q_EMIT mediaStatusChanged();
-}
-
-void MDKPlayer::advance()
-{
-    if (m_next_it == nullptr) {
-        return;
-    }
-    if (m_next_it != m_urls.cend()) {
-        ++m_next_it;
-    }
-    if (m_next_it == m_urls.cend()) {
-        if (m_loop) {
-            m_next_it = m_urls.cbegin();
-        } else {
-            m_next_it = nullptr;
-        }
-    }
-}
-
-void MDKPlayer::advance(const QUrl &value)
-{
-    if (value.isValid()) {
-        m_next_it = std::find(m_urls.cbegin(), m_urls.cend(), value);
-        advance();
-    }
-    m_player->setNextMedia(nullptr);
-    if (m_next_it == nullptr) {
-        return;
-    }
-    const QUrl nextUrl = *m_next_it;
-    if (nextUrl.isValid()) {
-        m_player->setNextMedia(qUtf8Printable(urlToString(nextUrl)));
-    }
-    advance();
 }
 
 bool MDKPlayer::isLoaded() const

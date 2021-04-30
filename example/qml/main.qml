@@ -22,9 +22,9 @@
  * SOFTWARE.
  */
 
-import QtQuick 2.9
-import QtQuick.Window 2.9
-import QtQuick.Controls 2.9
+import QtQuick 2.12
+import QtQuick.Window 2.12
+import QtQuick.Controls 2.12
 import Qt.labs.platform 1.1
 import wangwenx190.MDKWrapper 1.0
 
@@ -35,36 +35,6 @@ Window {
     height: 600
     title: (mdkPlayer.filePath.length > 0) ? (qsTr("Current playing: ") + mdkPlayer.filePath) : qsTr("MDKPlayer demo application")
 
-    function gfxApi() {
-        switch (GraphicsInfo.api) {
-        case GraphicsInfo.Direct3D11:
-            return "Direct3D11";
-        case GraphicsInfo.Vulkan:
-            return "Vulkan";
-        case GraphicsInfo.Metal:
-            return "Metal";
-        case GraphicsInfo.OpenGL:
-            return "OpenGL";
-        case GraphicsInfo.Null:
-            return "Null";
-        case GraphicsInfo.Direct3D11Rhi:
-            return "Direct3D11 Rhi";
-        case GraphicsInfo.VulkanRhi:
-            return "Vulkan Rhi";
-        case GraphicsInfo.MetalRhi:
-            return "Metal Rhi";
-        case GraphicsInfo.OpenGLRhi:
-            return "OpenGL Rhi";
-        case GraphicsInfo.Software:
-            return "Software";
-        case GraphicsInfo.NullRhi:
-            return "Null Rhi";
-        case GraphicsInfo.Unknown:
-            return "Unknown";
-        }
-        return "What?";
-    }
-
     Shortcut {
         sequence: StandardKey.Open
         onActivated: fileDialog.open()
@@ -73,7 +43,7 @@ Window {
     MDKPlayer {
         id: mdkPlayer
         anchors.fill: parent
-        url: fileDialog.file
+        source: fileDialog.file
         logLevel: MDKPlayer.LogLevel.Info
         hardwareDecoding: true
         onVideoSizeChanged: {
@@ -86,7 +56,7 @@ Window {
 
     FileDialog {
         id: fileDialog
-        currentFile: mdkPlayer.url
+        currentFile: mdkPlayer.source
         folder: StandardPaths.writableLocation(StandardPaths.MoviesLocation)
         nameFilters: [
             qsTr("Video files (%1)").arg(mdkPlayer.videoSuffixes.join(' ')),
@@ -94,19 +64,6 @@ Window {
             qsTr("All files (*)")
         ]
         options: FileDialog.ReadOnly
-    }
-
-    Label {
-        anchors {
-            top: parent.top
-            left: parent.left
-        }
-        text: qsTr("Current RHI backend: ") + gfxApi()
-        color: "white"
-        font {
-            bold: true
-            pointSize: 15
-        }
     }
 
     CheckBox {
@@ -205,7 +162,7 @@ Window {
     MDKPlayer {
         id: preview
         visible: false
-        url: mdkPlayer.url
+        source: mdkPlayer.source
         livePreview: true
         hardwareDecoding: true
         width: 300
