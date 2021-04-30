@@ -58,12 +58,12 @@ Window {
         id: fileDialog
         currentFile: mdkPlayer.source
         folder: StandardPaths.writableLocation(StandardPaths.MoviesLocation)
+        options: FileDialog.ReadOnly
         nameFilters: [
             qsTr("Video files (%1)").arg(mdkPlayer.videoSuffixes.join(' ')),
             qsTr("Audio files (%1)").arg(mdkPlayer.audioSuffixes.join(' ')),
             qsTr("All files (*)")
         ]
-        options: FileDialog.ReadOnly
     }
 
     CheckBox {
@@ -165,6 +165,7 @@ Window {
         source: mdkPlayer.source
         livePreview: true
         hardwareDecoding: true
+        logLevel: MDKPlayer.LogLevel.Warning
         width: 300
         height: 168.75
         y: window.height - preview.height - 50;
@@ -175,7 +176,7 @@ Window {
                 bottom: parent.bottom
                 bottomMargin: 5
             }
-            color: "red"
+            color: "white"
             font {
                 bold: true
                 pointSize: 15

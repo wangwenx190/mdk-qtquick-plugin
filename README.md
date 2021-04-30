@@ -1,4 +1,4 @@
-# mdk-qtquick-plugin
+# MDK wrapper for Qt Quick
 
 MDK wrapper for Qt Quick. Can be used as a normal visual element in .qml files easily.
 
@@ -10,54 +10,11 @@ MDK wrapper for Qt Quick. Can be used as a normal visual element in .qml files e
 
 ## Usage
 
-Once you have installed this plugin successfully, you can use it like any other normal visual elements of Qt Quick in .qml files:
-
-```qml
-import QtQuick.Dialogs 1.3
-import wangwenx190.MDKWrapper 1.0
-
-Shortcut {
-    sequence: StandardKey.Open
-    onActivated: fileDialog.open()
-}
-
-FileDialog {
-    id: fileDialog
-
-    title: qsTr("Please select a media file.")
-    folder: shortcuts.movies
-    nameFilters: [qsTr("Video files (%1)").arg(mdkPlayer.videoSuffixes.join(' ')), qsTr("Audio files (%1)").arg(mdkPlayer.audioSuffixes.join(' ')), qsTr("All files (*)")]
-
-    onAccepted: mdkPlayer.source = fileDialog.fileUrl
-}
-
-MDKPlayer {
-    id: mdkPlayer
-    anchors.fill: parent
-
-    source: "file:///D:/Videos/test.mkv" // playback will start immediately once the source url is changed
-    logLevel: MDKPlayer.LogLevel.Debug
-    volume: 0.8 // 0-1.0
-
-    onPositionChanged: // do something
-    onDurationChanged: // do something
-    onVideoSizeChanged: // do something
-    onPlaybackStateChanged: // do something
-    onMediaStatusChanged: // do something
-}
-```
-
-Notes
-
-- `mdkPlayer.duration`, `mdkPlayer.position` and `mdkPlayer.seek(position)` use **MILLISECONDS**.
-- `mdkPlayer.seek(position)` uses absolute position, not relative offset.
-- You can use `mdkPlayer.open(url)` to load and play *url* directly, it is equivalent to `mdkPlayer.source = url` (no need to call `mdkPlayer.play()` manually, because the playback will start immediately once the source url is changed).
-- You can also use `mdkPlayer.play()` to resume a paused playback, `mdkPlayer.pause()` to pause a playing playback, `mdkPlayer.stop()` to stop a loaded playback and `mdkPlayer.seek(position)` to jump to a different position.
-- To get the current playback state, use `mdkPlayer.isPlaying()`, `mdkPlayer.isPaused()` and `mdkPlayer.isStopped()`.
+See [example](/example/qml/main.qml).
 
 ## Compilation
 
-**Since this project makes heavy usage of QtRHI, you'll need Qt 5.14 or greater to build this project. It's recommended to use Qt 5.15 or Qt 6.**
+**Since this project makes heavy usage of Qt RHI, you'll need at least Qt 5.14 to build this project. It's recommended to use Qt 5.15 or Qt 6.**
 
 1. Checkout source code:
 
