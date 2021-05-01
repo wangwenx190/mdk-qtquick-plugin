@@ -513,7 +513,7 @@ private:
 
     QString m_snapshotDirectory = {};
     QString m_snapshotFormat = QStringLiteral("png");
-    QString m_snapshotTemplate = {};
+    QString m_snapshotTemplate = QStringLiteral("${filename}_${datetime}_${frametime}");
 
     QStringList m_videoDecoders = {};
     QStringList m_audioDecoders = {};

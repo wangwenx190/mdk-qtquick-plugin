@@ -29,9 +29,9 @@
 #include <QtCore/qfileinfo.h>
 #include <QtCore/qmimedatabase.h>
 #include <QtCore/qmimetype.h>
-#include <QtCore/qstandardpaths.h>
 #include <QtCore/qdatetime.h>
 #include <QtCore/qmath.h>
+#include <QtCore/qcoreapplication.h>
 #include <QtQuick/qquickwindow.h>
 #include <mdk/Player.h>
 
@@ -131,7 +131,7 @@ MDKPlayer::MDKPlayer(QQuickItem *parent) : QQuickItem(parent)
         QMetaObject::invokeMethod(this, "update");
     });
 
-    m_snapshotDirectory = QDir::toNativeSeparators(QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
+    m_snapshotDirectory = QDir::toNativeSeparators(QCoreApplication::applicationDirPath());
 
     connect(this, &MDKPlayer::sourceChanged, this, &MDKPlayer::fileNameChanged);
     connect(this, &MDKPlayer::sourceChanged, this, &MDKPlayer::filePathChanged);
@@ -144,19 +144,13 @@ MDKPlayer::MDKPlayer(QQuickItem *parent) : QQuickItem(parent)
     m_timer.setInterval(500);
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 12, 0))
     m_timer.callOnTimeout(this, [this](){
-        if (isStopped()) {
-            return;
-        }
-        if (isPlaying() || m_livePreview) {
+        if (isPlaying()) {
             Q_EMIT positionChanged();
         }
     });
 #else
     connect(&m_timer, &QTimer::timeout, this, [this](){
-        if (isStopped()) {
-            return;
-        }
-        if (isPlaying() || m_livePreview) {
+        if (isPlaying()) {
             Q_EMIT positionChanged();
         }
     });
@@ -527,7 +521,7 @@ void MDKPlayer::setAspectRatio(const qreal value)
 
 QString MDKPlayer::snapshotDirectory() const
 {
-    return QDir::toNativeSeparators(m_snapshotDirectory);
+    return m_snapshotDirectory;
 }
 
 void MDKPlayer::setSnapshotDirectory(const QString &value)
@@ -548,7 +542,7 @@ void MDKPlayer::setSnapshotDirectory(const QString &value)
 
 QString MDKPlayer::snapshotFormat() const
 {
-    return m_snapshotFormat.toLower();
+    return m_snapshotFormat;
 }
 
 void MDKPlayer::setSnapshotFormat(const QString &value)
@@ -805,6 +799,8 @@ void MDKPlayer::seek(const qint64 value, const bool keyFrame)
     const bool shouldAccurate = (!keyFrame || m_livePreview);
     m_player->seek(qBound(qint64(0), value, duration()),
         shouldAccurate ? MDK_NS_PREPEND(SeekFlag)::FromStart : MDK_NS_PREPEND(SeekFlag)::Default);
+    // In case the playback is paused.
+    Q_EMIT positionChanged();
     if (!m_livePreview) {
         qDebug() << "Seek -->" << value << "; Accurate seeking:" << shouldAccurate;
     }
@@ -840,12 +836,42 @@ void MDKPlayer::snapshot()
     MDK_NS_PREPEND(Player)::SnapshotRequest snapshotRequest = {};
     m_player->snapshot(&snapshotRequest, [this](MDK_NS_PREPEND(Player)::SnapshotRequest *ret, qreal frameTime) {
         Q_UNUSED(ret);
-        const QString path = QStringLiteral("%1%2%3_%4.%5").arg(
-                snapshotDirectory(), QDir::separator(), fileName(), QString::number(frameTime), snapshotFormat());
+        QString path = m_snapshotTemplate;
+        const QString completeBaseName = QFileInfo(filePath()).completeBaseName();
+        if (path.isEmpty()) {
+            path = completeBaseName;
+        } else {
+            path.replace(QStringLiteral("${filename}"), completeBaseName, Qt::CaseInsensitive);
+            const QDateTime currentDateTime = QDateTime::currentDateTime();
+            path.replace(QStringLiteral("${date}"), currentDateTime.toString(QStringLiteral("yyyy.MM.dd")), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${time}"), currentDateTime.toString(QStringLiteral("hh.mm.ss.zzz")), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${datetime}"), currentDateTime.toString(QStringLiteral("yyyy.MM.dd.hh.mm.ss.zzz")), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${frametime}"), QString::number(frameTime), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${position}"), QString::number(position()), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${duration}"), QString::number(duration()), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${title}"), m_mediaInfo.metaData.value(QStringLiteral("title")), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${author}"), m_mediaInfo.metaData.value(QStringLiteral("author")), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${artist}"), m_mediaInfo.metaData.value(QStringLiteral("artist")), Qt::CaseInsensitive);
+            path.replace(QStringLiteral("${album}"), m_mediaInfo.metaData.value(QStringLiteral("album")), Qt::CaseInsensitive);
+        }
+        path.append(u'.');
+        if (m_snapshotFormat.isEmpty()) {
+            path.append(QStringLiteral("png"));
+        } else {
+            path.append(m_snapshotFormat);
+        }
+        if (!m_snapshotDirectory.endsWith(u'/') && !m_snapshotDirectory.endsWith(u'\\')) {
+            path.prepend(QDir::separator());
+        }
+        if (m_snapshotDirectory.isEmpty()) {
+            path.prepend(QDir::toNativeSeparators(QCoreApplication::applicationDirPath()));
+        } else {
+            path.prepend(m_snapshotDirectory);
+        }
         if (!m_livePreview) {
             qDebug() << "Taking snapshot -->" << path;
         }
-        return path.toStdString();
+        return qstrdup(qUtf8Printable(path));
     });
 }
 
@@ -1074,7 +1100,12 @@ void MDKPlayer::resetInternalData()
 
 bool MDKPlayer::isLoaded() const
 {
-    return !isStopped();
+    const MediaStatus ms = mediaStatus();
+    return ((ms != MediaStatus::Unknown)
+            && (ms != MediaStatus::Invalid)
+            && (ms != MediaStatus::NoMedia)
+            && (ms != MediaStatus::Unloaded)
+            && (ms != MediaStatus::Loading));
 }
 
 bool MDKPlayer::isPlaying() const
