@@ -95,20 +95,21 @@ See [example](/example/qml/main.qml).
    }
    ```
 
-- Why my application complaints about failed to create EGL context ... etc at startup and then crashed?
+- Why my application complaints about `failed to create EGL context ... etc` at startup and then crashed?
 
-   ANGLE only supports OpenGL version <= 3.1. Please check whether you are using OpenGL newer than 3.1 through ANGLE or not.
+   ANGLE only supports OpenGL version <= 3.2. Please check whether you are using OpenGL newer than 3.2 through ANGLE or not.
 
    Desktop OpenGL doesn't have this limit. You can use any version you like. The default version that Qt uses is 2.0, which I think is kind of out-dated.
 
    Here is how to change the OpenGL version in Qt:
 
    ```cpp
-   QSurfaceFormat surfaceFormat;
+   QSurfaceFormat surfaceFormat = QSurfaceFormat::defaultFormat();
+   // Here we use desktop OpenGL. To switch to OpenGLES, use QSurfaceFormat::OpenGLES
+   surfaceFormat.setRenderableType(QSurfaceFormat::OpenGL);
    // Here we use OpenGL version 4.6 for instance.
-   // Don't use any versions newer than 3.1 if you are using ANGLE.
-   surfaceFormat.setMajorVersion(4);
-   surfaceFormat.setMinorVersion(6);
+   // Don't use any versions newer than 3.2 if you are using ANGLE.
+   surfaceFormat.setVersion(4, 6);
    // You can also use "QSurfaceFormat::CoreProfile" to disable the using of deprecated OpenGL APIs, however, some deprecated APIs will still be usable.
    surfaceFormat.setProfile(QSurfaceFormat::CompatibilityProfile);
    QSurfaceFormat::setDefaultFormat(surfaceFormat);
