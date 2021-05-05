@@ -51,6 +51,7 @@
 #include <mdk/Player.h>
 #include <mdk/RenderAPI.h>
 
+#if QT_CONFIG(vulkan) && __has_include(<vulkan/vulkan.h>)
 #define VK_ENSURE(x, ...) VK_RUN_CHECK(x, return __VA_ARGS__)
 #define VK_WARN(x, ...) VK_RUN_CHECK(x)
 #define VK_RUN_CHECK(x, ...) \
@@ -61,6 +62,7 @@
             __VA_ARGS__; \
         } \
     } while (false)
+#endif
 
 MDKPLAYER_BEGIN_NAMESPACE
 
